@@ -1,0 +1,23 @@
+{
+    "name": "arborxr/unreleased-log",
+    "description": "Generate unreleased changelog with ability to commit and push to your git repo.",
+    "keywords": ["gitlab", "gitlabci", "circleci", "github", "shortcut"],
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Nicholas Bates",
+            "email": "nicholas@nrobates.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "ArborXR\\UnreleasedLog\\": "src/"
+        }
+    },
+    "bin": [
+        "unreleased-log-helper"
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
