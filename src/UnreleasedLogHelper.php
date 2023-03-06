@@ -4,106 +4,125 @@ namespace ArborXR\UnreleasedLog;
 
 class UnreleasedLogHelper
 {
-    public string $committerName = '';
-
-    public string $committerEmail = '';
-
-    public string $outputPath = __DIR__;
-
-    public string $changelogFilename = 'CHANGELOG.md';
-
-    public string $unreleasedChangesPath = __DIR__.'/unreleased-changes';
-
-    public string $unreleasedChangelogFilename = 'UNRELEASED.md';
+    public string $outputPath = './';
 
     public bool $updateChangelogFile = false;
 
-    public bool $skipGitCommands = true;
+    public bool $skipCleanup = false;
+
+    public string $changelogFilename = 'CHANGELOG.md';
+
+    public string $unreleasedChangesPath = './unreleased-changes';
+
+    public string $unreleasedChangelogFilename = 'UNRELEASED.md';
 
     /**
      * @return void
      */
     public static function main()
     {
+        fwrite(STDOUT, '-------------------------------------------------'.PHP_EOL);
+        fwrite(STDOUT, 'UNRELEASED LOG GENERATION STARTED'.PHP_EOL);
+        fwrite(STDOUT, '-------------------------------------------------'.PHP_EOL);
+
         $command = new static;
         $command->setup();
-        $command->run();
+        $command->generate();
+        $command->cleanup();
+
+        fwrite(STDOUT, PHP_EOL.'Unreleased Changelog Generation Complete'.PHP_EOL);
+    }
+
+    public function getHelpOutput()
+    {
+        return <<<OUPTUT
+Unreleased Log
+
+Usage:
+  ./vendor/bin/unreleased-log-helper [options] [arguments]
+
+Options:
+  -h, --help                     Display help for the given command. When no command is given display help for the list command
+  -c, --changelog-write          Write new unreleased changelog section to the actual CHANGELOG.md file (default: false)
+  -s, --skip-cleanup             Skip the cleanup process that removes all of the JSON files that were merged (default: false)
+  -o, --output-dir=OUTPUT-DIR    If specified, use the given directory as the output directory (default: "./")
+  -f, --files-dir=FILES-DIR      If specified, use the given directory as the individual changelog JSON files directory (default: "./")
+  
+OUPTUT;
     }
 
     public function setup(): void
     {
-        $argv = $_SERVER['argv'];
-        $argvCount = count($argv);
+        $short_options = "hcso:f:";
+        $long_options = ["help", "changelog-write", "output-dir:", "files-dir:"];
+        $options = getopt($short_options, $long_options);
 
-        if ($argvCount !== 3 && $argvCount !== 4 && $argvCount !== 5 && $argvCount !== 6) {
-            fwrite(STDERR, 'Invalid arguments.'.PHP_EOL);
-            exit(1);
+        if (isset($options['h']) || isset($options['help'])) {
+            fwrite(STDOUT, $this->getHelpOutput());
+            exit();
         }
 
-        [, $this->committerName, $this->committerEmail, $this->outputPath] = $argv;
+        $this->updateChangelogFile = (isset($options['c']) || isset($options['changelog-write']));
 
-        $this->unreleasedChangesPath = $this->outputPath.'unreleased-changes';
+        $this->skipCleanup = (isset($options['s']) || isset($options['skip-cleanup']));
 
-        $this->updateChangelogFile = isset($argv[4]) && $argv[4] === 'true';
-        $this->skipGitCommands = isset($argv[5]) && $argv[5] === 'true';
-    }
-
-    /**
-     * @param  array  $argv
-     * @return void
-     */
-    public function run()
-    {
-        $this->generate();
-
-        system('git clean -df');
-
-        if (strpos(system('git status -sb'), '.md') === false) {
-            fwrite(STDOUT, 'No changes.'.PHP_EOL);
-            exit(0);
-        } else {
-            fwrite(STDOUT, 'New changes to be committed.'.PHP_EOL);
+        if (isset($options['o']) || isset($options['output-dir'])) {
+            $this->outputPath = isset($options['o']) ? $options['o'] : $options['output-dir'];
         }
 
-        if ($this->skipGitCommands) {
-            exit(1);
+        if (isset($options['f']) || isset($options['files-dir'])) {
+            $this->unreleasedChangesPath = isset($options['f']) ? $options['f'] : $options['files-dir'];
         }
-
-        $this->setupGitCommitter($this->committerName, $this->committerEmail);
-        $this->createCommit();
     }
 
     public function generate()
     {
-        fwrite(STDOUT, 'Unreleased Changelog Generation Started'.PHP_EOL);
-        fwrite(STDOUT, '-------------------------------------------------'.PHP_EOL);
-
         $unreleasedNotes = $this->mergedReleaseNotes();
+        if (empty($unreleasedNotes)) {
+            return;
+        }
+
         file_put_contents($this->unreleasedChangesPath.'/merged-changes.json', json_encode($unreleasedNotes));
 
-        fwrite(STDOUT, 'Creating Markdown Section for Unreleased Changes'.PHP_EOL);
+        fwrite(STDOUT, ' > Creating Markdown Section for Unreleased Changes'.PHP_EOL);
 
         $unreleasedMarkdown = trim($this->createUnreleasedMarkdown($unreleasedNotes, 2));
 
         if (!$this->createUnreleasedDocument($unreleasedMarkdown)) {
-            fwrite(STDERR, '*** Error Creating Unreleased Document or nothing to write'.PHP_EOL);
+            fwrite(STDERR, '     * Error Creating Unreleased Document or nothing to write'.PHP_EOL);
         }
 
         if ($this->updateChangelogFile) {
             if (!$this->updateChangelogFile($unreleasedMarkdown)) {
-                fwrite(STDERR, '*** Error Updating Changelog Document or nothing to write'.PHP_EOL);
+                fwrite(STDERR, '     * Error Updating Changelog Document or nothing to write'.PHP_EOL);
             }
+        } else {
+            fwrite(STDOUT, ' > Skipping Changelog Update'.PHP_EOL);
+        }
+    }
+
+    public function cleanup()
+    {
+        if ($this->skipCleanup) {
+            fwrite(STDOUT, ' > Skipping Cleanup'.PHP_EOL);
+            return;
         }
 
-        echo PHP_EOL.'Unreleased Changelog Generation Complete'.PHP_EOL;
+        fwrite(STDOUT, ' > Cleaning up individual changelog files'.PHP_EOL);
+
+        array_map('unlink', glob($this->unreleasedChangesPath.'/*.json'));
     }
 
     protected function mergedReleaseNotes(): array
     {
-        fwrite(STDOUT, 'Merging Unreleased Release Note Files'.PHP_EOL);
+        fwrite(STDOUT, ' > Merging Unreleased Release Note Files'.PHP_EOL);
 
         $mergedReleaseNotes = [];
         $releaseNoteFilenames = glob($this->unreleasedChangesPath.'/*.json');
+        if (count($releaseNoteFilenames) === 0) {
+            fwrite(STDOUT, '     - No Unreleased Release Note Files To Process'.PHP_EOL);
+            return [];
+        }
 
         foreach ($releaseNoteFilenames as $releaseNoteFilename) {
             preg_match('/(sc\-[0-9]+)/', $releaseNoteFilename, $matches);
@@ -155,7 +174,7 @@ class UnreleasedLogHelper
 
     protected function createUnreleasedDocument($markdown): bool|int
     {
-        fwrite(STDOUT, 'Saving '.$this->unreleasedChangelogFilename.' File'.PHP_EOL);
+        fwrite(STDOUT, '   > Saving '.$this->unreleasedChangelogFilename.' File'.PHP_EOL);
 
         $handle = fopen($this->outputPath.'/'.$this->unreleasedChangelogFilename, 'w+');
 
@@ -168,7 +187,7 @@ class UnreleasedLogHelper
 
     protected function updateChangelogFile($markdownToInsert): bool|int
     {
-        fwrite(STDOUT, 'Updating the '.$this->changelogFilename.' file'.PHP_EOL);
+        fwrite(STDOUT, '   > Updating the '.$this->changelogFilename.' file'.PHP_EOL);
 
         $existingChangelog = file_get_contents($this->outputPath.'/'.$this->changelogFilename);
         $changelogLines = explode("\n", $existingChangelog);
@@ -201,54 +220,4 @@ class UnreleasedLogHelper
 
         return $written;
     }
-
-    /**
-     * @param  string  $name
-     * @param  string  $email
-     * @return void
-     */
-    private function setupGitCommitter($name, $email): void
-    {
-        system("git config user.name {$name}");
-        system("git config user.email {$email}");
-    }
-
-    /**
-     * @return void
-     */
-    private function createCommit(): void
-    {
-        if ((bool) getenv('GITHUB_ACTIONS')) {
-            $branch = substr(system('git branch'), 2);
-            $accessToken = getenv('GITHUB_TOKEN');
-            $repositoryName = getenv('GITHUB_REPOSITORY');
-
-            system("git remote set-url origin https://{$accessToken}@github.com/{$repositoryName}/");
-            system('git add -u');
-            system('git commit -m "ci: unreleased changelog published"');
-            system("git push -q origin {$branch}");
-        } elseif ((bool) getenv('CIRCLECI')) {
-            $branch = getenv('CIRCLE_BRANCH');
-            $accessToken = getenv('GITHUB_ACCESS_TOKEN');
-            $repositoryName = getenv('CIRCLE_PROJECT_REPONAME');
-            $repositoryUserName = getenv('CIRCLE_PROJECT_USERNAME');
-
-            system("git remote set-url origin https://{$accessToken}@github.com/{$repositoryUserName}/{$repositoryName}/");
-            system('git add -u');
-            system('git commit -m "ci: unreleased changelog published"');
-            system("git push -q origin {$branch}");
-        } elseif ((bool) getenv('GITLAB_CI')) {
-            $branch = getenv('CI_COMMIT_REF_NAME');
-            $token = getenv('GITLAB_API_PRIVATE_TOKEN');
-            $repositoryUrl = getenv('CI_REPOSITORY_URL');
-            preg_match('/https:\/\/gitlab-ci-token:(.*)@(.*)/', $repositoryUrl, $matches);
-
-            system("git remote set-url origin https://gitlab-ci-token:{$token}@{$matches[2]}");
-            system("git checkout {$branch}");
-            system('git add -u');
-            system('git commit -m "ci: unreleased changelog published"');
-            system("git push -q origin {$branch}");
-        }
-    }
-
 }
