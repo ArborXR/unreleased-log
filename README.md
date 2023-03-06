@@ -6,6 +6,18 @@ This helper takes all individual unreleased JSON changelog files from the `unrel
 
 ## Installation
 
+Add the following to your composer.json file:
+
+```
+"repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/ArborXR/unreleased-log/"
+        }
+    ]
+```
+Then you can install.
+
 ```
 composer require --dev arborxr/unreleased-log
 ```
