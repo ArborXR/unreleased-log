@@ -82,8 +82,6 @@ OUPTUT;
             return;
         }
 
-        file_put_contents($this->unreleasedChangesPath.'/merged-changes.json', json_encode($unreleasedNotes));
-
         fwrite(STDOUT, ' > Creating Markdown Section for Unreleased Changes'.PHP_EOL);
 
         $unreleasedMarkdown = trim($this->createUnreleasedMarkdown($unreleasedNotes, 2));
