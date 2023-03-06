@@ -86,12 +86,12 @@ class UnreleasedLogHelper
         $unreleasedMarkdown = trim($this->createUnreleasedMarkdown($unreleasedNotes, 2));
 
         if (!$this->createUnreleasedDocument($unreleasedMarkdown)) {
-            fwrite(STDERR, '*** Error Creating Unreleased Document'.PHP_EOL);
+            fwrite(STDERR, '*** Error Creating Unreleased Document or nothing to write'.PHP_EOL);
         }
 
         if ($this->updateChangelogFile) {
             if (!$this->updateChangelogFile($unreleasedMarkdown)) {
-                fwrite(STDERR, '*** Error Updating Changelog Document'.PHP_EOL);
+                fwrite(STDERR, '*** Error Updating Changelog Document or nothing to write'.PHP_EOL);
             }
         }
 
@@ -157,11 +157,13 @@ class UnreleasedLogHelper
     {
         fwrite(STDOUT, 'Saving '.$this->unreleasedChangelogFilename.' File'.PHP_EOL);
 
-        if (file_exists($this->outputPath.'/'.$this->unreleasedChangelogFilename)) {
-            unlink($this->outputPath.'/'.$this->unreleasedChangelogFilename);
-        }
+        $handle = fopen($this->outputPath.'/'.$this->unreleasedChangelogFilename, 'w+');
 
-        return file_put_contents($this->outputPath.'/'.$this->unreleasedChangelogFilename, $markdown);
+        $written = fwrite($handle, $markdown);
+
+        fclose($handle);
+
+        return $written;
     }
 
     protected function updateChangelogFile($markdownToInsert): bool|int
