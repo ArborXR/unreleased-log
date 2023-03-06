@@ -19,7 +19,7 @@ This is a private repository. You will need to have access to the ArborXR GitHub
 Then you can install.
 
 ```
-$ composer require --dev arborxr/unreleased-log
+composer require --dev arborxr/unreleased-log
 ```
 
 ## How to Run
