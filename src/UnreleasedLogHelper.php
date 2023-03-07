@@ -122,13 +122,24 @@ OUPTUT;
             return [];
         }
 
+        $orderedReleaseNotes = [];
+        $unTicketCount = 0;
+
         foreach ($releaseNoteFilenames as $releaseNoteFilename) {
             preg_match('/(sc\-[0-9]+)/', $releaseNoteFilename, $matches);
             $ticket = $matches[0] ?? null;
+            if (!$ticket) {
+                $unTicketCount++;
+            }
 
             $releaseNotes = $this->addTicketRelation(json_decode(file_get_contents($releaseNoteFilename), true), $ticket);
+            $orderedReleaseNotes[str_replace('sc-', '', $ticket ?? 'zzz'.$unTicketCount)] = $releaseNotes;
+        }
 
-            $mergedReleaseNotes = array_merge_recursive($mergedReleaseNotes, $releaseNotes);
+        ksort($orderedReleaseNotes);
+
+        foreach ($orderedReleaseNotes as $orderedReleaseNote) {
+            $mergedReleaseNotes = array_merge_recursive($mergedReleaseNotes, $orderedReleaseNote);
         }
 
         return $mergedReleaseNotes;
